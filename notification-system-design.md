@@ -114,3 +114,39 @@ As the number of students and notifications grows, this design has some issues:
 1. **Large JOIN Table**: The `user_notifications` table will grow extremely fast. If we have 10,000 students and send a campus-wide notification, it inserts 10,000 rows. Soon, joining these tables becomes very slow.
 2. **Write Bottleneck**: Inserting thousands of rows for every notification blocks other queries.
 
+## Indexing & Query Optimization
+
+### Why Query is Slow
+Without indexes, PostgreSQL has to scan every single row in the database tables to find the matches for user_id. If the table has millions of rows, this takes a lot of time and resources.
+
+### Better Indexes
+To speed this up, we should add indexes on the columns used in WHERE, JOIN, and ORDER BY:
+
+```sql
+CREATE INDEX idx_user_notifications_user ON user_notifications(user_id);
+CREATE INDEX idx_user_notifications_notification ON user_notifications(notification_id);
+CREATE INDEX idx_notifications_type_date ON notifications(type, created_at DESC);
+```
+
+### Complexity
+- **Without indexes**: The database does a sequential scan, which takes O(N) time.
+- **With indexes**: The database uses a B-Tree index scan, which takes O(log N) time.
+
+### Why Indexing Every Column is Bad
+We should not index every column because:
+1. **Slower Writes**: Every INSERT, UPDATE, or DELETE will need to rewrite the indexes, slowing down write operations.
+2. **Disk Space**: Indexes take up additional disk space.
+3. **Memory Usage**: The database needs to keep indexes in memory (RAM) for fast lookups. If we index everything, RAM gets wasted.
+
+### Placement Query
+To fetch only the Placement notifications:
+
+```sql
+SELECT n.*
+FROM notifications n
+JOIN user_notifications un ON n.id = un.notification_id
+WHERE un.user_id = 123 AND n.type = 'Placement'
+ORDER BY n.created_at DESC;
+```
+
+
