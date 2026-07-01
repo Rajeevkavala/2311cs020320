@@ -167,5 +167,24 @@ WebSockets allow real-time communication but have some trade-offs:
 2. **Reconnections**: Mobile clients disconnect frequently. We need client logic to handle reconnects and fetch missed notifications.
 3. **Multi-server Scaling**: If we run multiple backend servers, a client on Server A won't get notifications published on Server B unless we use a Pub/Sub system like Redis.
 
+## Better notify_all Architecture (Asynchronous Notifications)
+
+When sending a notification to all students:
+1. We write the notification to the database.
+2. We push notification tasks into an in-memory queue.
+3. A background worker picks up tasks from the queue, sends emails/push notifications, handles failures, and retries if needed.
+
+### Why Email Should Not Block DB Insert
+If we send emails synchronously during the database insert:
+- Sending an email takes 1-3 seconds. If we have 10,000 students, the API request will timeout or take hours.
+- If the email service fails, the database transaction might roll back, causing us to lose the notification record.
+- By doing it asynchronously, the DB insert happens instantly (a few milliseconds), the API returns success immediately to the publisher, and the emails are sent in the background.
+
+### Failure Handling & Retry
+- **Try/Catch**: Each email task is wrapped in a try/catch block.
+- **Retry Queue**: If sending fails (e.g., email API is down), we don't throw away the task. We increment a retry count and push it back to the end of the queue with a delay (exponential backoff).
+- **Max Retries**: If it fails more than 3 times, we log it as an error or move it to a Dead Letter Queue (DLQ) so we don't block the queue forever.
+
+
 
 
