@@ -149,4 +149,23 @@ WHERE un.user_id = 123 AND n.type = 'Placement'
 ORDER BY n.created_at DESC;
 ```
 
+## Caching, Pagination & WebSockets
+
+### Redis Caching
+To avoid querying the database every time a user loads their notifications, we can store notifications in Redis (an in-memory store).
+- We can save the user's latest 50 notifications in Redis under the key `user:123:notifications`.
+- When a user requests notifications, we check Redis first. If it is there, we return it. If not, we query the database, store it in Redis with a 5-minute expiry, and return it.
+
+### Pagination
+Instead of loading all notifications at once, we load them in pages:
+- **Offset Pagination**: Using `LIMIT 10 OFFSET 20`. It is simple but gets slow on large offsets because the database still scans the skipped rows.
+- **Cursor Pagination**: Using `WHERE id < last_seen_id LIMIT 10`. It is much faster because it uses the primary key index directly.
+
+### WebSocket Trade-offs
+WebSockets allow real-time communication but have some trade-offs:
+1. **Resource Usage**: The server must keep a persistent connection open for every online user, using memory.
+2. **Reconnections**: Mobile clients disconnect frequently. We need client logic to handle reconnects and fetch missed notifications.
+3. **Multi-server Scaling**: If we run multiple backend servers, a client on Server A won't get notifications published on Server B unless we use a Pub/Sub system like Redis.
+
+
 
